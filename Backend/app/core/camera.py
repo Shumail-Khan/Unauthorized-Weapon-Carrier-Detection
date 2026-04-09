@@ -10,8 +10,14 @@ from app.core.detection import detect_objects
 from app.core.threat_engine import classify_threat
 from app.db.database import incidents_collection
 
+MEDIA_FOLDER = "media/incidents"
+CROP_FOLDER = "media/crops"
+
 def generate_frames():
     camera = cv2.VideoCapture(0)
+
+    last_saved_time = 0  # ✅ cooldown
+
     while True:
         success, frame = camera.read()
         if not success:
@@ -23,23 +29,47 @@ def generate_frames():
 
         annotated_frame = draw_annotations(frame.copy(), detections)
 
-        # If unauthorized → save evidence
-        if not authorized:
+        # ✅ Save only every 5 seconds
+        if not authorized and (time.time() - last_saved_time > 5):
+
+            # 1️⃣ Save annotated frame
             filename = f"{uuid4()}.jpg"
             image_path = os.path.join(MEDIA_FOLDER, filename)
             cv2.imwrite(image_path, annotated_frame)
 
+            # 2️⃣ Save crops
+            crop_paths = []
+
+            for d in detections:
+                if d["class"] == "Gun":
+                    x1 = d["bbox"]["x1"]
+                    y1 = d["bbox"]["y1"]
+                    x2 = d["bbox"]["x2"]
+                    y2 = d["bbox"]["y2"]
+
+                    crop = frame[y1:y2, x1:x2]
+
+                    crop_filename = f"{uuid4()}.jpg"
+                    crop_path = os.path.join(CROP_FOLDER, crop_filename)
+                    cv2.imwrite(crop_path, crop)
+
+                    crop_paths.append(crop_path)
+
+            # 3️⃣ Store in DB
             incident = {
                 "timestamp": datetime.utcnow(),
                 "detections": detections,
                 "authorized": authorized,
                 "threat_level": threat,
-                "image_path": image_path
+                "image_path": image_path,
+                "crop_paths": crop_paths
             }
 
             incidents_collection.insert_one(incident)
 
-        # Encode frame
+            last_saved_time = time.time()
+
+        # Encode frame for streaming
         ret, buffer = cv2.imencode(".jpg", annotated_frame)
         frame_bytes = buffer.tobytes()
 
@@ -50,4 +80,6 @@ def generate_frames():
             b"\r\n"
         )
 
-        time.sleep(0.03)  # ~30 FPS
+        time.sleep(0.03)
+
+    camera.release()
