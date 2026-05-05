@@ -9,12 +9,13 @@ from app.core.authorization import check_authorization
 from app.core.detection import detect_objects
 from app.core.threat_engine import classify_threat
 from app.db.database import incidents_collection
+from app.core.runtime_config import runtime_config
 
 MEDIA_FOLDER = "media/incidents"
 CROP_FOLDER = "media/crops"
 
 def generate_frames():
-    camera = cv2.VideoCapture(0)
+    camera = cv2.VideoCapture(runtime_config["camera_index"])
 
     last_saved_time = 0  # ✅ cooldown
 
@@ -23,11 +24,27 @@ def generate_frames():
         if not success:
             break
 
+        if not runtime_config["detection_enabled"]:
+            # just stream raw frame
+            ret, buffer = cv2.imencode(".jpg", frame)
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" +
+                buffer.tobytes() +
+                b"\r\n"
+            )
+            continue
+        
         detections = detect_objects(frame)
         authorized = check_authorization(detections)
         threat = classify_threat(detections)
 
-        annotated_frame = draw_annotations(frame.copy(), detections)
+        annotated_frame = draw_annotations(
+            frame.copy(), 
+            detections, 
+            threat_level=threat, 
+            is_authorized=authorized
+        )
 
         # ✅ Save only every 5 seconds
         if not authorized and (time.time() - last_saved_time > 5):
@@ -41,7 +58,7 @@ def generate_frames():
             crop_paths = []
 
             for d in detections:
-                if d["class"] == "Gun":
+                if d["class"] == "Gun" or d["class"] == "Weapon":
                     x1 = d["bbox"]["x1"]
                     y1 = d["bbox"]["y1"]
                     x2 = d["bbox"]["x2"]

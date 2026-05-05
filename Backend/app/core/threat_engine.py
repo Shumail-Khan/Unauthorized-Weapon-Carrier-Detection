@@ -2,7 +2,7 @@ def classify_threat(detections):
     threat_score = 0
 
     for d in detections:
-        if d["class"] == "Gun":
+        if d["class"] == "Gun" or d["class"] == "Weapon":
             if d["confidence"] > 0.7:
                 threat_score += 3
             else:

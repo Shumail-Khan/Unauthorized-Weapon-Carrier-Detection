@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Incidents Dashboard</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #111;
+            color: #fff;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .card img {
+            width: 100%;
+            border-radius: 8px;
+        }
+
+        .meta {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .threat {
+            font-weight: bold;
+        }
+
+        .HIGH {
+            color: red;
+        }
+
+        .MEDIUM {
+            color: orange;
+        }
+
+        .LOW {
+            color: green;
+        }
+
+        .CRITICAL {
+            color: purple;
+        }
+
+        .crops {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .crops img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Incident Dashboard</h1>
+
+    <div class="container" id="incidentContainer"></div>
+
+    <script>
+        async function loadIncidents() {
+            const res = await fetch("/incidents");
+            const data = await res.json();
+
+            const container = document.getElementById("incidentContainer");
+            container.innerHTML = "";
+
+            data.forEach(incident => {
+
+                const imageUrl = "/" + incident.image_path.replace(/\\/g, "/");
+
+                const cropImages = (incident.crop_paths || []).map(c => {
+                    const url = "/" + c.replace(/\\/g, "/");
+                    return `<img src="${url}" />`;
+                }).join("");
+
+                const card = document.createElement("div");
+                card.className = "card";
+
+                card.innerHTML = `
+            <img src="${imageUrl}" />
+
+            <div class="meta">
+                <div><strong>Time:</strong> ${new Date(incident.timestamp).toLocaleString()}</div>
+                <div><strong>Authorized:</strong> ${incident.authorized}</div>
+                <div class="threat ${incident.threat_level}">
+                    Threat: ${incident.threat_level}
+                </div>
+                <div><strong>Detections:</strong> ${incident.detections.length}</div>
+
+                <div class="crops">
+                    ${cropImages}
+                </div>
+            </div>
+        `;
+
+                container.appendChild(card);
+            });
+        }
+
+        // initial load
+        loadIncidents();
+
+        // auto refresh every 5 sec
+        setInterval(loadIncidents, 5000);
+    </script>
+
+</body>
+
+</html>

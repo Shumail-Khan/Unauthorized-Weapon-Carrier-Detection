@@ -3,7 +3,7 @@ def check_authorization(detections):
     uniform_detected = False
 
     for d in detections:
-        if d["class"] == "Gun":
+        if d["class"] == "Gun" or d["class"] == "Weapon":
             weapon_detected = True
         if d["class"] == "Uniform":
             uniform_detected = True

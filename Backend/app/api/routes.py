@@ -5,7 +5,7 @@ import time
 import numpy as np
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from uuid import uuid4
 
@@ -15,13 +15,50 @@ from app.core.authorization import check_authorization
 from app.core.threat_engine import classify_threat
 from app.core.alert_service import send_email_alert
 from app.core.annotation import draw_annotations
-
+from app.core.runtime_config import runtime_config
 from app.db.database import incidents_collection
 
 router = APIRouter()
 
 MEDIA_FOLDER = "media/incidents"
 CROP_FOLDER = "media/crops"
+
+@router.get("/incidents")
+def get_incidents():
+    incidents = list(incidents_collection.find().sort("timestamp", -1))
+    for i in incidents:
+        i["_id"] = str(i["_id"])
+    return incidents
+
+@router.get("/settings")
+def get_settings():
+    return runtime_config
+
+
+@router.post("/settings")
+async def update_settings(settings: dict):
+
+    if "detection_enabled" in settings:
+        runtime_config["detection_enabled"] = settings["detection_enabled"]
+
+    if "conf_threshold" in settings:
+        runtime_config["conf_threshold"] = float(settings["conf_threshold"])
+
+    if "camera_index" in settings:
+        runtime_config["camera_index"] = int(settings["camera_index"])
+
+    return {
+        "message": "Settings updated",
+        "current": runtime_config
+    }
+
+@router.get("/settings-view")
+def settings_page():
+    return FileResponse("settings.html")
+
+@router.get("/incidents-view")
+def incidents_page():
+    return FileResponse("incidents.html")
 
 @router.get("/video-feed")
 def video_feed():
@@ -32,7 +69,11 @@ def video_feed():
 
 @router.post("/analyze-image") 
 async def analyze_image(file: UploadFile = File(...)):
-
+    if not runtime_config["detection_enabled"]:
+        return {
+            "message": "Detection is disabled"
+        }
+    
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -45,9 +86,13 @@ async def analyze_image(file: UploadFile = File(...)):
     crop_paths = []
 
     if not authorized:
-
         # 1️⃣ Draw annotations
-        annotated_frame = draw_annotations(frame.copy(), detections)
+        annotated_frame = draw_annotations(
+            frame.copy(), 
+            detections, 
+            threat_level=threat, 
+            is_authorized=authorized
+        )
 
         # 2️⃣ Save full annotated frame
         filename = f"{uuid4()}.jpg"

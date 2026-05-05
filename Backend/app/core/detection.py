@@ -1,10 +1,11 @@
 from ultralytics import YOLO
 from app.config import MODEL_PATH, CONF_THRESHOLD
+from app.core.runtime_config import runtime_config
 
 model = YOLO(MODEL_PATH)
 
 def detect_objects(frame):
-    results = model(frame, conf=CONF_THRESHOLD)
+    results = model(frame, conf=runtime_config["conf_threshold"])
 
     detections = []
 

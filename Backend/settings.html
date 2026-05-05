@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>System Settings</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #111;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .box {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 10px;
+            width: 400px;
+            margin: auto;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px;
+            width: 100%;
+            background: #007bff;
+            border: none;
+            color: white;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="box">
+        <h2>System Settings</h2>
+
+        <label>
+            Detection Enabled
+            <input type="checkbox" id="toggle">
+        </label>
+
+        <label>
+            Confidence Threshold
+            <input type="range" min="0.1" max="1.0" step="0.1" id="conf">
+            <span id="confValue"></span>
+        </label>
+
+        <label>
+            Camera Index
+            <input type="number" id="camera" min="0" max="5">
+        </label>
+
+        <button onclick="saveSettings()">Save</button>
+    </div>
+
+    <script>
+        async function loadSettings() {
+            const res = await fetch("/settings");
+            const data = await res.json();
+
+            document.getElementById("toggle").checked = data.detection_enabled;
+            document.getElementById("conf").value = data.conf_threshold;
+            document.getElementById("confValue").innerText = data.conf_threshold;
+            document.getElementById("camera").value = data.camera_index;
+        }
+
+        document.getElementById("conf").oninput = (e) => {
+            document.getElementById("confValue").innerText = e.target.value;
+        };
+
+        async function saveSettings() {
+            const payload = {
+                detection_enabled: document.getElementById("toggle").checked,
+                conf_threshold: document.getElementById("conf").value,
+                camera_index: document.getElementById("camera").value
+            };
+
+            await fetch("/settings", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            alert("Settings updated");
+        }
+
+        loadSettings();
+    </script>
+
+</body>
+
+</html>
