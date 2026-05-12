@@ -97,11 +97,12 @@ async def analyze_image(file: UploadFile = File(...)):
         # 2️⃣ Save full annotated frame
         filename = f"{uuid4()}.jpg"
         image_path = os.path.join(MEDIA_FOLDER, filename)
+        image_path = image_path.replace("\\", "/")
         cv2.imwrite(image_path, annotated_frame)
 
         # 3️⃣ Save cropped weapon images
         for d in detections:
-            if d["class"] == "Gun":
+            if d["class"] in ["Gun", "Weapon"]:
                 x1 = d["bbox"]["x1"]
                 y1 = d["bbox"]["y1"]
                 x2 = d["bbox"]["x2"]
@@ -111,6 +112,7 @@ async def analyze_image(file: UploadFile = File(...)):
 
                 crop_filename = f"{uuid4()}.jpg"
                 crop_path = os.path.join(CROP_FOLDER, crop_filename)
+                crop_path = crop_path.replace("\\", "/")
                 cv2.imwrite(crop_path, crop)
 
                 crop_paths.append(crop_path)

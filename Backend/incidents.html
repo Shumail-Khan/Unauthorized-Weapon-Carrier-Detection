@@ -69,6 +69,129 @@
             height: 60px;
             object-fit: cover;
         }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 999;
+
+            inset: 0;
+
+            background: rgba(0, 0, 0, 0.85);
+
+            overflow-y: auto;
+
+            padding: 20px;
+
+            box-sizing: border-box;
+        }
+
+        .modal-content {
+            background: #1e1e1e;
+
+            width: 100%;
+            max-width: 900px;
+
+            margin: auto;
+
+            border-radius: 12px;
+
+            display: flex;
+            flex-direction: column;
+
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            padding: 15px 20px;
+
+            border-bottom: 1px solid #333;
+        }
+
+        .modal-body {
+            padding: 20px;
+
+            max-height: 80vh;
+
+            overflow-y: auto;
+
+            flex: 1;
+        }
+
+        .modal-body img.main-image {
+            width: 100%;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+
+        .close-btn {
+            font-size: 28px;
+            cursor: pointer;
+            color: white;
+        }
+
+        .close-btn:hover {
+            color: red;
+        }
+
+        .modal-info {
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+
+        .modal-detections {
+            background: #111;
+            padding: 15px;
+            border-radius: 8px;
+
+            overflow-x: auto;
+        }
+
+        .modal-detections pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #0f0;
+        }
+
+        .crop-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .crop-gallery img {
+            width: 120px;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        @media (max-width: 768px) {
+
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-content {
+                max-height: 95vh;
+            }
+
+            .modal-body {
+                padding: 15px;
+            }
+
+            .crop-gallery img {
+                width: 90px;
+                height: 90px;
+            }
+        }
     </style>
 </head>
 
@@ -79,6 +202,76 @@
     <div class="container" id="incidentContainer"></div>
 
     <script>
+        function openModal(incident) {
+
+            const modal = document.getElementById("modal");
+            const body = document.getElementById("modalBody");
+
+            document.body.style.overflow = "hidden";
+
+            const imageUrl = "/" + incident.image_path.replace(/\\/g, "/");
+
+            const cropImages = (incident.crop_paths || []).map(c => {
+
+                const url = "/" + c.replace(/\\/g, "/");
+
+                return `
+            <img src="${url}" />
+        `;
+            }).join("");
+
+            body.innerHTML = `
+
+        <img 
+            src="${imageUrl}" 
+            class="main-image"
+        />
+
+        <div class="modal-info">
+
+            <div>
+                <strong>Time:</strong>
+                ${new Date(incident.timestamp).toLocaleString()}
+            </div>
+
+            <div>
+                <strong>Authorized:</strong>
+                ${incident.authorized}
+            </div>
+
+            <div class="${incident.threat_level}">
+                <strong>Threat:</strong>
+                ${incident.threat_level}
+            </div>
+
+            <div>
+                <strong>Detections:</strong>
+                ${incident.detections.length}
+            </div>
+
+        </div>
+
+        <h3>Weapon Crops</h3>
+
+        <div class="crop-gallery">
+            ${cropImages || "<p>No crops available</p>"}
+        </div>
+
+        <h3>Detection Data</h3>
+
+        <div class="modal-detections">
+            <pre>${JSON.stringify(incident.detections, null, 2)}</pre>
+        </div>
+    `;
+
+            modal.style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById("modal").style.display = "none";
+            document.body.style.overflow = "auto";
+        }
+
         async function loadIncidents() {
             const res = await fetch("/incidents");
             const data = await res.json();
@@ -115,6 +308,7 @@
             </div>
         `;
 
+                card.onclick = () => openModal(incident);
                 container.appendChild(card);
             });
         }
@@ -122,9 +316,30 @@
         // initial load
         loadIncidents();
 
+        window.onclick = function (event) {
+
+            const modal = document.getElementById("modal");
+
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+
         // auto refresh every 5 sec
         setInterval(loadIncidents, 5000);
     </script>
+    <div id="modal" class="modal">
+        <div id="modalContent" class="modal-content">
+
+            <div class="modal-header">
+                <h2>Incident Details</h2>
+                <span class="close-btn" onclick="closeModal()">&times;</span>
+            </div>
+
+            <div id="modalBody" class="modal-body"></div>
+
+        </div>
+    </div>
 
 </body>
 

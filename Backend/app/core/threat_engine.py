@@ -1,18 +1,16 @@
 def classify_threat(detections):
-    threat_score = 0
 
-    for d in detections:
-        if d["class"] == "Gun" or d["class"] == "Weapon":
-            if d["confidence"] > 0.7:
-                threat_score += 3
-            else:
-                threat_score += 1
+    persons = [d for d in detections if d["class"] == "Person"]
+    weapons = [d for d in detections if d["class"] in ["Gun", "Weapon"]]
 
-    if threat_score >= 5:
-        return "CRITICAL"
-    elif threat_score >= 3:
-        return "HIGH"
-    elif threat_score >= 1:
+    if not weapons:
+        return "LOW"
+
+    count = len(persons)
+
+    if count <= 1:
+        return "LOW"
+    elif count <= 5:
         return "MEDIUM"
     else:
-        return "LOW"
+        return "HIGH"

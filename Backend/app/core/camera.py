@@ -7,9 +7,10 @@ from uuid import uuid4
 from app.core.annotation import draw_annotations
 from app.core.authorization import check_authorization
 from app.core.detection import detect_objects
-from app.core.threat_engine import classify_threat
 from app.db.database import incidents_collection
 from app.core.runtime_config import runtime_config
+from app.core.state_manager import threat_memory
+from app.core.threat_engine import classify_threat
 
 MEDIA_FOLDER = "media/incidents"
 CROP_FOLDER = "media/crops"
@@ -37,7 +38,13 @@ def generate_frames():
         
         detections = detect_objects(frame)
         authorized = check_authorization(detections)
-        threat = classify_threat(detections)
+        unauthorized = not authorized
+        threat_memory.update(unauthorized)
+        
+        if threat_memory.is_active():
+            threat = classify_threat(detections)
+        else:
+            threat = "LOW"
 
         annotated_frame = draw_annotations(
             frame.copy(), 

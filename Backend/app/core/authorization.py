@@ -1,14 +1,34 @@
+from app.core.association import is_linked
+
+WEAPON_CLASSES = ["Gun", "Weapon"]
+UNIFORM_CLASSES = ["Uniform"]
+PERSON_CLASS = "Person"
+
+
 def check_authorization(detections):
-    weapon_detected = False
-    uniform_detected = False
 
+    persons = []
+    weapons = []
+    uniforms = []
+
+    # Separate objects
     for d in detections:
-        if d["class"] == "Gun" or d["class"] == "Weapon":
-            weapon_detected = True
-        if d["class"] == "Uniform":
-            uniform_detected = True
+        if d["class"] == PERSON_CLASS:
+            persons.append(d["bbox"])
+        elif d["class"] in WEAPON_CLASSES:
+            weapons.append(d["bbox"])
+        elif d["class"] in UNIFORM_CLASSES:
+            uniforms.append(d["bbox"])
 
-    if weapon_detected and not uniform_detected:
-        return False  # Unauthorized
+    unauthorized_found = False
 
-    return True
+    for person in persons:
+
+        has_weapon = any(is_linked(person, w) for w in weapons)
+        has_uniform = any(is_linked(person, u) for u in uniforms)
+
+        if has_weapon and not has_uniform:
+            unauthorized_found = True
+            break
+
+    return not unauthorized_found
