@@ -1,4 +1,4 @@
-MODEL_PATH = "models/V3_26m.pt"
+MODEL_PATH = "models/V2_best.pt"
 CONF_THRESHOLD = 0.5
 IOU_THRESHOLD = 0.5
 
