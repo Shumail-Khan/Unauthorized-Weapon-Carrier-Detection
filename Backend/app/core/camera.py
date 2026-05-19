@@ -1,85 +1,128 @@
 import cv2
 import os
 import time
+
 from datetime import datetime
 from uuid import uuid4
 
-from app.core.annotation import draw_annotations
-from app.core.authorization import check_authorization
-from app.core.detection import detect_objects
 from app.db.database import incidents_collection
+
 from app.core.runtime_config import runtime_config
 from app.core.state_manager import threat_memory
-from app.core.threat_engine import classify_threat
+from app.core.processor import process_frame
+from app.core.live_state import live_state
 
 MEDIA_FOLDER = "media/incidents"
 CROP_FOLDER = "media/crops"
 
+# Ensure folders exist
+os.makedirs(MEDIA_FOLDER, exist_ok=True)
+os.makedirs(CROP_FOLDER, exist_ok=True)
+
+
 def generate_frames():
+
     camera = cv2.VideoCapture(runtime_config["camera_index"])
 
-    last_saved_time = 0  # ✅ cooldown
+    last_saved_time = 0
 
     while True:
+
         success, frame = camera.read()
+
         if not success:
             break
 
+        # =========================
+        # Detection Disabled
+        # =========================
         if not runtime_config["detection_enabled"]:
-            # just stream raw frame
+
             ret, buffer = cv2.imencode(".jpg", frame)
+
             yield (
                 b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" +
-                buffer.tobytes() +
-                b"\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n"
+                + buffer.tobytes()
+                + b"\r\n"
             )
+
             continue
-        
-        detections = detect_objects(frame)
-        authorized = check_authorization(detections)
+
+        # =========================
+        # Process Frame
+        # =========================
+        result = process_frame(frame)
+
+        annotated_frame = result["frame"]
+        detections = result["detections"]
+        authorized = result["authorized"]
+        threat = result["threat"]
+
+        # =========================
+        # Threat Memory
+        # =========================
         unauthorized = not authorized
+
         threat_memory.update(unauthorized)
-        
-        if threat_memory.is_active():
-            threat = classify_threat(detections)
-        else:
+
+        if not threat_memory.is_active():
             threat = "LOW"
 
-        annotated_frame = draw_annotations(
-            frame.copy(), 
-            detections, 
-            threat_level=threat, 
-            is_authorized=authorized
-        )
+        # =========================
+        # Live State Update
+        # =========================
+        live_state["authorized"] = authorized
+        live_state["threat_level"] = threat
+        live_state["detections"] = detections
+        live_state["last_update"] = datetime.utcnow().isoformat()
 
-        # ✅ Save only every 5 seconds
+        # =========================
+        # Save Incident
+        # =========================
         if not authorized and (time.time() - last_saved_time > 5):
 
-            # 1️⃣ Save annotated frame
+            # Save annotated image
             filename = f"{uuid4()}.jpg"
-            image_path = os.path.join(MEDIA_FOLDER, filename)
+
+            image_path = os.path.join(
+                MEDIA_FOLDER,
+                filename
+            ).replace("\\", "/")
+
             cv2.imwrite(image_path, annotated_frame)
 
-            # 2️⃣ Save crops
+            # Save crops
             crop_paths = []
 
             for d in detections:
-                if d["class"] == "Gun" or d["class"] == "Weapon":
-                    x1 = d["bbox"]["x1"]
-                    y1 = d["bbox"]["y1"]
-                    x2 = d["bbox"]["x2"]
-                    y2 = d["bbox"]["y2"]
 
-                    crop = frame[y1:y2, x1:x2]
+                if d["class"] not in ["Gun", "Weapon"]:
+                    continue
 
-                    crop_filename = f"{uuid4()}.jpg"
-                    crop_path = os.path.join(CROP_FOLDER, crop_filename)
-                    cv2.imwrite(crop_path, crop)
+                x1 = d["bbox"]["x1"]
+                y1 = d["bbox"]["y1"]
+                x2 = d["bbox"]["x2"]
+                y2 = d["bbox"]["y2"]
 
-                    crop_paths.append(crop_path)
+                crop = frame[y1:y2, x1:x2]
 
-            # 3️⃣ Store in DB
+                # Prevent empty crop save
+                if crop.size == 0:
+                    continue
+
+                crop_filename = f"{uuid4()}.jpg"
+
+                crop_path = os.path.join(
+                    CROP_FOLDER,
+                    crop_filename
+                ).replace("\\", "/")
+
+                cv2.imwrite(crop_path, crop)
+
+                crop_paths.append(crop_path)
+
+            # Store in DB
             incident = {
                 "timestamp": datetime.utcnow(),
                 "detections": detections,
@@ -93,15 +136,18 @@ def generate_frames():
 
             last_saved_time = time.time()
 
-        # Encode frame for streaming
+        # =========================
+        # Encode & Stream
+        # =========================
         ret, buffer = cv2.imencode(".jpg", annotated_frame)
+
         frame_bytes = buffer.tobytes()
 
         yield (
             b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" +
-            frame_bytes +
-            b"\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n"
+            + frame_bytes
+            + b"\r\n"
         )
 
         time.sleep(0.03)

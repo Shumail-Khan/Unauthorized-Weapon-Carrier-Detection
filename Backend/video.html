@@ -1,11 +1,355 @@
-<!-- save as video.html in your project root or static folder -->
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>Video Feed</title>
+
+    <title>AI Surveillance Dashboard</title>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+
+            margin: 0;
+
+            font-family: Arial, sans-serif;
+
+            background: #0d0d0d;
+
+            color: white;
+        }
+
+        .navbar {
+
+            background: #151515;
+
+            padding: 15px 20px;
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            border-bottom: 1px solid #333;
+        }
+
+        .navbar h1 {
+
+            margin: 0;
+
+            font-size: 22px;
+        }
+
+        .status {
+
+            padding: 8px 14px;
+
+            border-radius: 8px;
+
+            font-weight: bold;
+        }
+
+        .LOW {
+            background: green;
+        }
+
+        .MEDIUM {
+            background: orange;
+        }
+
+        .HIGH {
+            background: red;
+        }
+
+        .CRITICAL {
+            background: purple;
+        }
+
+        .layout {
+
+            display: grid;
+
+            grid-template-columns: 1fr 350px;
+
+            gap: 20px;
+
+            padding: 20px;
+        }
+
+        .video-panel {
+
+            background: #151515;
+
+            border-radius: 12px;
+
+            overflow: hidden;
+
+            position: relative;
+        }
+
+        .video-panel img {
+
+            width: 100%;
+
+            display: block;
+        }
+
+        .overlay {
+
+            position: absolute;
+
+            top: 20px;
+
+            left: 20px;
+
+            background: rgba(0,0,0,0.7);
+
+            padding: 10px 15px;
+
+            border-radius: 10px;
+
+            backdrop-filter: blur(5px);
+        }
+
+        .sidebar {
+
+            background: #151515;
+
+            border-radius: 12px;
+
+            padding: 15px;
+
+            overflow-y: auto;
+
+            max-height: calc(100vh - 100px);
+        }
+
+        .incident {
+
+            background: #202020;
+
+            margin-bottom: 15px;
+
+            border-radius: 10px;
+
+            overflow: hidden;
+        }
+
+        .incident img {
+
+            width: 100%;
+        }
+
+        .incident-info {
+
+            padding: 10px;
+
+            font-size: 14px;
+        }
+
+        .detection-list {
+
+            margin-top: 10px;
+        }
+
+        .detection-item {
+
+            background: #252525;
+
+            padding: 8px;
+
+            border-radius: 8px;
+
+            margin-bottom: 8px;
+        }
+
+        .fullscreen-btn {
+
+            position: absolute;
+
+            bottom: 20px;
+
+            right: 20px;
+
+            background: rgba(0,0,0,0.7);
+
+            border: none;
+
+            color: white;
+
+            padding: 10px 15px;
+
+            border-radius: 8px;
+
+            cursor: pointer;
+        }
+
+        @media (max-width: 900px) {
+
+            .layout {
+
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+
+                max-height: none;
+            }
+        }
+
+    </style>
+
 </head>
+
 <body>
-    <h1>Live Video Feed</h1>
-    <img src="http://127.0.0.1:8000/video-feed" width="640" height="480" />
+
+    <div class="navbar">
+
+        <h1>AI Surveillance Dashboard</h1>
+
+        <div id="threatBadge" class="status LOW">
+            LOW
+        </div>
+
+    </div>
+
+    <div class="layout">
+
+        <div class="video-panel">
+
+            <img
+                id="videoFeed"
+                src="/video-feed"
+            />
+
+            <div class="overlay">
+
+                <div>
+                    <strong>Status:</strong>
+                    <span id="authStatus">AUTHORIZED</span>
+                </div>
+
+                <div>
+                    <strong>Detections:</strong>
+                    <span id="detectionCount">0</span>
+                </div>
+
+            </div>
+
+            <button
+                class="fullscreen-btn"
+                onclick="toggleFullscreen()"
+            >
+                Fullscreen
+            </button>
+
+        </div>
+
+        <div class="sidebar">
+
+            <h2>Recent Incidents</h2>
+
+            <div id="incidentList"></div>
+
+        </div>
+
+    </div>
+
+    <script>
+
+        async function updateLiveStatus() {
+
+            const res = await fetch("/live-status");
+
+            const data = await res.json();
+
+            document.getElementById("authStatus").innerText =
+                data.authorized ? "AUTHORIZED" : "UNAUTHORIZED";
+
+            document.getElementById("detectionCount").innerText =
+                data.detections.length;
+
+            const badge = document.getElementById("threatBadge");
+
+            badge.innerText = data.threat_level;
+
+            badge.className = "status " + data.threat_level;
+        }
+
+        async function loadIncidents() {
+
+            const res = await fetch("/incidents");
+
+            const data = await res.json();
+
+            const container = document.getElementById("incidentList");
+
+            container.innerHTML = "";
+
+            data.slice(0, 10).forEach(incident => {
+
+                const imageUrl =
+                    "/" + incident.image_path.replace(/\\/g, "/");
+
+                const div = document.createElement("div");
+
+                div.className = "incident";
+
+                div.innerHTML = `
+
+                    <img src="${imageUrl}" />
+
+                    <div class="incident-info">
+
+                        <div>
+                            <strong>Threat:</strong>
+                            ${incident.threat_level}
+                        </div>
+
+                        <div>
+                            <strong>Time:</strong>
+                            ${new Date(incident.timestamp).toLocaleString()}
+                        </div>
+
+                        <div>
+                            <strong>Detections:</strong>
+                            ${incident.detections.length}
+                        </div>
+
+                    </div>
+                `;
+
+                container.appendChild(div);
+            });
+        }
+
+        function toggleFullscreen() {
+
+            const elem = document.querySelector(".video-panel");
+
+            if (!document.fullscreenElement) {
+                elem.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        updateLiveStatus();
+
+        loadIncidents();
+
+        setInterval(updateLiveStatus, 1000);
+
+        setInterval(loadIncidents, 5000);
+
+    </script>
+
 </body>
+
 </html>

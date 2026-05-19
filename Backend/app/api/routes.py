@@ -1,11 +1,11 @@
-import os
 import cv2
 import time
+from pathlib import Path
 
 import numpy as np
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 
 from uuid import uuid4
 
@@ -17,11 +17,21 @@ from app.core.alert_service import send_email_alert
 from app.core.annotation import draw_annotations
 from app.core.runtime_config import runtime_config
 from app.db.database import incidents_collection
+from app.core.live_state import live_state
 
 router = APIRouter()
 
-MEDIA_FOLDER = "media/incidents"
-CROP_FOLDER = "media/crops"
+BASE_DIR = Path(__file__).resolve().parents[2]
+MEDIA_DIR = BASE_DIR / "media"
+MEDIA_FOLDER = MEDIA_DIR / "incidents"
+CROP_FOLDER = MEDIA_DIR / "crops"
+VIDEO_FOLDER = MEDIA_DIR / "videos"
+SETTINGS_HTML = BASE_DIR / "settings.html"
+INCIDENTS_HTML = BASE_DIR / "incidents.html"
+
+MEDIA_FOLDER.mkdir(parents=True, exist_ok=True)
+CROP_FOLDER.mkdir(parents=True, exist_ok=True)
+VIDEO_FOLDER.mkdir(parents=True, exist_ok=True)
 
 @router.get("/incidents")
 def get_incidents():
@@ -29,6 +39,10 @@ def get_incidents():
     for i in incidents:
         i["_id"] = str(i["_id"])
     return incidents
+
+@router.get("/live-status")
+def get_live_status():
+    return live_state
 
 @router.get("/settings")
 def get_settings():
@@ -54,11 +68,11 @@ async def update_settings(settings: dict):
 
 @router.get("/settings-view")
 def settings_page():
-    return FileResponse("settings.html")
+    return FileResponse(str(SETTINGS_HTML))
 
 @router.get("/incidents-view")
 def incidents_page():
-    return FileResponse("incidents.html")
+    return FileResponse(str(INCIDENTS_HTML))
 
 @router.get("/video-feed")
 def video_feed():
@@ -96,8 +110,7 @@ async def analyze_image(file: UploadFile = File(...)):
 
         # 2️⃣ Save full annotated frame
         filename = f"{uuid4()}.jpg"
-        image_path = os.path.join(MEDIA_FOLDER, filename)
-        image_path = image_path.replace("\\", "/")
+        image_path = str(MEDIA_FOLDER / filename).replace("\\", "/")
         cv2.imwrite(image_path, annotated_frame)
 
         # 3️⃣ Save cropped weapon images
@@ -111,8 +124,7 @@ async def analyze_image(file: UploadFile = File(...)):
                 crop = frame[y1:y2, x1:x2]
 
                 crop_filename = f"{uuid4()}.jpg"
-                crop_path = os.path.join(CROP_FOLDER, crop_filename)
-                crop_path = crop_path.replace("\\", "/")
+                crop_path = str(CROP_FOLDER / crop_filename).replace("\\", "/")
                 cv2.imwrite(crop_path, crop)
 
                 crop_paths.append(crop_path)
@@ -135,3 +147,56 @@ async def analyze_image(file: UploadFile = File(...)):
         "detections": detections,
         "image_saved": image_path
     }
+    
+@router.post("/analyze-video")
+async def analyze_video(file: UploadFile = File(...)):
+
+    input_path = str(VIDEO_FOLDER / f"input_{uuid4()}.mp4").replace("\\", "/")
+
+    output_path = str(VIDEO_FOLDER / f"output_{uuid4()}.mp4").replace("\\", "/")
+
+    with open(input_path, "wb") as buffer:
+        buffer.write(await file.read())
+
+    cap = cv2.VideoCapture(input_path)
+
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+
+    out = cv2.VideoWriter(
+        output_path,
+        fourcc,
+        fps,
+        (width, height)
+    )
+
+    from app.core.processor import process_frame
+
+    frame_count = 0
+
+    while True:
+
+        success, frame = cap.read()
+
+        if not success:
+            break
+
+        result = process_frame(frame)
+
+        annotated_frame = result["frame"]
+
+        out.write(annotated_frame)
+
+        frame_count += 1
+
+    cap.release()
+    out.release()
+
+    return JSONResponse({
+        "message": "Video processed successfully",
+        "output_video": output_path,
+        "frames_processed": frame_count
+    })

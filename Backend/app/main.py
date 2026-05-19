@@ -1,18 +1,26 @@
+from pathlib import Path
+
 from fastapi import FastAPI
-from app.api.routes import router
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import os
+from fastapi.staticfiles import StaticFiles
+
+from app.api.routes import router
 
 app = FastAPI(title="WDUP Backend API")
 
-os.makedirs("media/incidents", exist_ok=True)
-os.makedirs("media/crops", exist_ok=True)
+BASE_DIR = Path(__file__).resolve().parent.parent
+MEDIA_DIR = BASE_DIR / "media"
+INCIDENTS_DIR = MEDIA_DIR / "incidents"
+CROPS_DIR = MEDIA_DIR / "crops"
+VIDEO_HTML_PATH = BASE_DIR / "video.html"
 
-app.mount("/media", StaticFiles(directory="media"), name="media")
+INCIDENTS_DIR.mkdir(parents=True, exist_ok=True)
+CROPS_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 
 app.include_router(router)
 
 @app.get("/")
 def index():
-    return FileResponse("video.html")
+    return FileResponse(str(VIDEO_HTML_PATH))
