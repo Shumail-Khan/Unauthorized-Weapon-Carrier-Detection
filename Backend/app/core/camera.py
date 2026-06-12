@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app.db.database import incidents_collection
 
+from app.core.alert_service import send_email_alert
 from app.core.runtime_config import runtime_config
 from app.core.state_manager import threat_memory
 from app.core.processor import process_frame
@@ -15,16 +16,90 @@ from app.core.live_state import live_state
 MEDIA_FOLDER = "media/incidents"
 CROP_FOLDER = "media/crops"
 
-# Ensure folders exist
 os.makedirs(MEDIA_FOLDER, exist_ok=True)
 os.makedirs(CROP_FOLDER, exist_ok=True)
+
+camera_instance = None
+
+
+def get_camera():
+
+    global camera_instance
+
+    if camera_instance is None:
+
+        camera_instance = cv2.VideoCapture(
+            runtime_config["camera_index"],
+            cv2.CAP_DSHOW
+        )
+
+        # Lower resolution = faster
+        camera_instance.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        camera_instance.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+        # Lower internal buffer
+        camera_instance.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+    return camera_instance
+
+
+def remove_duplicate_persons(detections):
+
+    persons = []
+    others = []
+
+    for d in detections:
+
+        if d["class"] == "Person":
+            persons.append(d)
+        else:
+            others.append(d)
+
+    filtered = []
+
+    for p in persons:
+
+        px1 = p["bbox"]["x1"]
+        py1 = p["bbox"]["y1"]
+        px2 = p["bbox"]["x2"]
+        py2 = p["bbox"]["y2"]
+
+        keep = True
+
+        for existing in filtered:
+
+            ex1 = existing["bbox"]["x1"]
+            ey1 = existing["bbox"]["y1"]
+            ex2 = existing["bbox"]["x2"]
+            ey2 = existing["bbox"]["y2"]
+
+            # simple overlap check
+            if (
+                abs(px1 - ex1) < 40 and
+                abs(py1 - ey1) < 40 and
+                abs(px2 - ex2) < 40 and
+                abs(py2 - ey2) < 40
+            ):
+                keep = False
+                break
+
+        if keep:
+            filtered.append(p)
+
+    return filtered + others
 
 
 def generate_frames():
 
-    camera = cv2.VideoCapture(runtime_config["camera_index"])
+    camera = get_camera()
 
+    last_email_time = 0
     last_saved_time = 0
+
+    frame_skip = 2
+    frame_count = 0
+
+    latest_frame = None
 
     while True:
 
@@ -32,6 +107,8 @@ def generate_frames():
 
         if not success:
             break
+
+        frame_count += 1
 
         # =========================
         # Detection Disabled
@@ -50,12 +127,29 @@ def generate_frames():
             continue
 
         # =========================
+        # Skip Frames for Speed
+        # =========================
+        if frame_count % frame_skip != 0 and latest_frame is not None:
+
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n"
+                + latest_frame
+                + b"\r\n"
+            )
+
+            continue
+
+        # =========================
         # Process Frame
         # =========================
         result = process_frame(frame)
 
+        detections = remove_duplicate_persons(
+            result["detections"]
+        )
+
         annotated_frame = result["frame"]
-        detections = result["detections"]
         authorized = result["authorized"]
         threat = result["threat"]
 
@@ -70,7 +164,7 @@ def generate_frames():
             threat = "LOW"
 
         # =========================
-        # Live State Update
+        # Live State
         # =========================
         live_state["authorized"] = authorized
         live_state["threat_level"] = threat
@@ -82,7 +176,6 @@ def generate_frames():
         # =========================
         if not authorized and (time.time() - last_saved_time > 5):
 
-            # Save annotated image
             filename = f"{uuid4()}.jpg"
 
             image_path = os.path.join(
@@ -92,7 +185,6 @@ def generate_frames():
 
             cv2.imwrite(image_path, annotated_frame)
 
-            # Save crops
             crop_paths = []
 
             for d in detections:
@@ -107,7 +199,6 @@ def generate_frames():
 
                 crop = frame[y1:y2, x1:x2]
 
-                # Prevent empty crop save
                 if crop.size == 0:
                     continue
 
@@ -122,7 +213,6 @@ def generate_frames():
 
                 crop_paths.append(crop_path)
 
-            # Store in DB
             incident = {
                 "timestamp": datetime.utcnow(),
                 "detections": detections,
@@ -133,23 +223,35 @@ def generate_frames():
             }
 
             incidents_collection.insert_one(incident)
+            if time.time() - last_email_time > 30:
+                send_email_alert(
+                    threat_level=threat,
+                    detections=detections
+                )
+                last_email_time = time.time()
 
             last_saved_time = time.time()
 
         # =========================
         # Encode & Stream
         # =========================
-        ret, buffer = cv2.imencode(".jpg", annotated_frame)
+        ret, buffer = cv2.imencode(
+            ".jpg",
+            annotated_frame,
+            [cv2.IMWRITE_JPEG_QUALITY, 70]
+        )
 
-        frame_bytes = buffer.tobytes()
+        latest_frame = buffer.tobytes()
 
         yield (
             b"--frame\r\n"
             b"Content-Type: image/jpeg\r\n\r\n"
-            + frame_bytes
+            + latest_frame
             + b"\r\n"
         )
 
-        time.sleep(0.03)
+        time.sleep(0.01)
 
     camera.release()
+    global camera_instance
+    camera_instance = None

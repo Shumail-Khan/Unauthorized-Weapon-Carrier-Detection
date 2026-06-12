@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 
 from uuid import uuid4
 
+import app.core.camera as camera_module
 from app.core.camera import generate_frames
 from app.core.detection import detect_objects
 from app.core.authorization import check_authorization
@@ -60,6 +61,9 @@ async def update_settings(settings: dict):
 
     if "camera_index" in settings:
         runtime_config["camera_index"] = int(settings["camera_index"])
+        if camera_module.camera_instance is not None:
+            camera_module.camera_instance.release()
+            camera_module.camera_instance = None
 
     return {
         "message": "Settings updated",

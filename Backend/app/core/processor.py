@@ -74,7 +74,7 @@ def process_frame(frame):
             "crop_paths": crop_paths
         }
 
-        incidents_collection.insert_one(incident)
+        # incidents_collection.insert_one(incident)
 
     return {
         "frame": annotated_frame,

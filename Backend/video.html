@@ -8,7 +8,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <style>
-
         * {
             box-sizing: border-box;
         }
@@ -108,7 +107,7 @@
 
             left: 20px;
 
-            background: rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.7);
 
             padding: 10px 15px;
 
@@ -177,7 +176,7 @@
 
             right: 20px;
 
-            background: rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.7);
 
             border: none;
 
@@ -202,7 +201,6 @@
                 max-height: none;
             }
         }
-
     </style>
 
 </head>
@@ -223,10 +221,7 @@
 
         <div class="video-panel">
 
-            <img
-                id="videoFeed"
-                src="/video-feed"
-            />
+            <img id="videoFeed" src="/video-feed" />
 
             <div class="overlay">
 
@@ -240,12 +235,15 @@
                     <span id="detectionCount">0</span>
                 </div>
 
+                <div style="margin-top:10px;">
+                    <button onclick="toggleDetection()">
+                        Toggle Detection
+                    </button>
+                </div>
+
             </div>
 
-            <button
-                class="fullscreen-btn"
-                onclick="toggleFullscreen()"
-            >
+            <button class="fullscreen-btn" onclick="toggleFullscreen()">
                 Fullscreen
             </button>
 
@@ -338,6 +336,26 @@
             } else {
                 document.exitFullscreen();
             }
+        }
+
+        let detectionEnabled = true;
+
+        async function toggleDetection() {
+
+            detectionEnabled = !detectionEnabled;
+
+            await fetch("/settings", {
+
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify({
+                    detection_enabled: detectionEnabled
+                })
+            });
         }
 
         updateLiveStatus();

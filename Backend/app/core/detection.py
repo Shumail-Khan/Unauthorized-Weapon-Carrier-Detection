@@ -6,6 +6,32 @@ from app.core.runtime_config import runtime_config
 person_model = YOLO("yolov8n.pt")              # COCO
 custom_model = YOLO(MODEL_PATH)       # Your trained mode
 
+def boxes_overlap(boxA, boxB, threshold=0.5):
+
+    xA = max(boxA["x1"], boxB["x1"])
+    yA = max(boxA["y1"], boxB["y1"])
+    xB = min(boxA["x2"], boxB["x2"])
+    yB = min(boxA["y2"], boxB["y2"])
+
+    inter = max(0, xB - xA) * max(0, yB - yA)
+
+    if inter <= 0:
+        return False
+
+    areaA = (
+        (boxA["x2"] - boxA["x1"]) *
+        (boxA["y2"] - boxA["y1"])
+    )
+
+    areaB = (
+        (boxB["x2"] - boxB["x1"]) *
+        (boxB["y2"] - boxB["y1"])
+    )
+
+    iou = inter / float(areaA + areaB - inter)
+
+    return iou > threshold
+
 def detect_objects(frame):
 
     detections = []
@@ -65,4 +91,26 @@ def detect_objects(frame):
                 "source": "CUSTOM"
             })
 
-    return detections
+    filtered = []
+
+    for d in detections:
+
+        duplicate = False
+
+        for f in filtered:
+
+            same_class = d["class"] == f["class"]
+
+            overlap = boxes_overlap(
+                d["bbox"],
+                f["bbox"]
+            )
+
+            if same_class and overlap:
+                duplicate = True
+                break
+
+        if not duplicate:
+            filtered.append(d)
+
+    return filtered
