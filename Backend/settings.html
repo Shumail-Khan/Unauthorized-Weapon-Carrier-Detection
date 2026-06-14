@@ -40,11 +40,21 @@
             color: white;
             cursor: pointer;
         }
+
+        #saveStatus {
+
+            margin-top: 10px;
+
+            color: #4caf50;
+
+            font-weight: bold;
+        }
     </style>
 </head>
 
 <body>
 
+    <div id="saveStatus"></div>
     <div class="box">
         <h2>System Settings</h2>
 
@@ -88,14 +98,31 @@
                 conf_threshold: document.getElementById("conf").value,
                 camera_index: document.getElementById("camera").value
             };
+            const btn =
+                document.querySelector("button");
+
+            btn.disabled = true;
+            btn.innerText = "Saving...";
 
             await fetch("/settings", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
+            
+            btn.disabled = false;
+            btn.innerText = "Save";
 
-            alert("Settings updated");
+            document.getElementById("saveStatus")
+                .innerText =
+                "✓ Settings updated successfully";
+
+            setTimeout(() => {
+
+                document.getElementById("saveStatus")
+                    .innerText = "";
+
+            }, 3000);
         }
 
         loadSettings();

@@ -66,10 +66,6 @@
             background: red;
         }
 
-        .CRITICAL {
-            background: purple;
-        }
-
         .layout {
 
             display: grid;
@@ -201,11 +197,106 @@
                 max-height: none;
             }
         }
+
+        .alert-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+
+            background: #c62828;
+
+            color: white;
+
+            text-align: center;
+
+            padding: 15px;
+
+            font-size: 18px;
+
+            font-weight: bold;
+
+            z-index: 9999;
+
+            display: none;
+
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        #toastContainer {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            z-index: 9999;
+        }
+
+        .toast {
+            background: #222;
+
+            color: white;
+
+            padding: 15px;
+
+            margin-bottom: 10px;
+
+            border-left: 5px solid red;
+
+            border-radius: 8px;
+
+            min-width: 300px;
+
+            animation: slideIn .4s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+            }
+
+            to {
+                transform: translateX(0);
+            }
+        }
+
+        .control-panel {
+
+            display: flex;
+
+            gap: 10px;
+
+            margin-top: 10px;
+        }
+
+        .control-panel button {
+
+            padding: 10px;
+
+            border: none;
+
+            border-radius: 6px;
+
+            cursor: pointer;
+        }
     </style>
 
 </head>
 
 <body>
+    <audio id="alarmSound">
+        <source src="/static/alarm.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="alertBanner" class="alert-banner">
+        🚨 WEAPON DETECTED - SECURITY ALERT
+    </div>
+
+    <div id="toastContainer"></div>
 
     <div class="navbar">
 
@@ -214,6 +305,22 @@
         <div id="threatBadge" class="status LOW">
             LOW
         </div>
+
+    </div>
+
+    <div class="control-panel">
+
+        <button id="detectBtn" onclick="toggleDetection()">
+            Detection ON
+        </button>
+
+        <button onclick="refreshIncidents()">
+            Refresh
+        </button>
+
+        <button onclick="openSettings()">
+            Settings
+        </button>
 
     </div>
 
@@ -233,12 +340,6 @@
                 <div>
                     <strong>Detections:</strong>
                     <span id="detectionCount">0</span>
-                </div>
-
-                <div style="margin-top:10px;">
-                    <button onclick="toggleDetection()">
-                        Toggle Detection
-                    </button>
                 </div>
 
             </div>
@@ -275,8 +376,9 @@
 
             const badge = document.getElementById("threatBadge");
 
-            badge.innerText = data.threat_level;
-
+            badge.innerText =
+                "THREAT LEVEL: " +
+                data.threat_level;
             badge.className = "status " + data.threat_level;
         }
 
@@ -285,6 +387,39 @@
             const res = await fetch("/incidents");
 
             const data = await res.json();
+
+            const latest = data[0];
+
+            if (
+                latest &&
+                latest.timestamp !== lastIncidentTime
+            ) {
+
+                if (!firstLoad) {
+
+                    showToast(
+                        `New ${latest.threat_level} incident detected`
+                    );
+
+                    document.getElementById("alarmSound")
+                        .play()
+                        .catch(() => { });
+
+                    if (latest.threat_level === "HIGH") {
+
+                        document.getElementById("alertBanner")
+                            .style.display = "block";
+
+                        setTimeout(() => {
+                            document.getElementById("alertBanner")
+                                .style.display = "none";
+                        }, 10000);
+                    }
+                }
+
+                lastIncidentTime = latest.timestamp;
+                firstLoad = false;
+            }
 
             const container = document.getElementById("incidentList");
 
@@ -345,27 +480,58 @@
             detectionEnabled = !detectionEnabled;
 
             await fetch("/settings", {
-
                 method: "POST",
-
                 headers: {
                     "Content-Type": "application/json"
                 },
-
                 body: JSON.stringify({
                     detection_enabled: detectionEnabled
                 })
             });
+
+            document.getElementById("detectBtn").innerText =
+                detectionEnabled
+                    ? "Detection ON"
+                    : "Detection OFF";
+        }
+
+        let lastIncidentTime = null;
+        let firstLoad = true;
+
+        function showToast(message) {
+
+            const toast = document.createElement("div");
+
+            toast.className = "toast";
+
+            toast.innerText = message;
+
+            document.getElementById("toastContainer")
+                .appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 5000);
         }
 
         updateLiveStatus();
 
         loadIncidents();
 
+        function refreshIncidents() {
+            loadIncidents();
+        }
+
+        function openSettings() {
+            window.open(
+                "/settings-view",
+                "_blank"
+            );
+        }
+
         setInterval(updateLiveStatus, 1000);
 
         setInterval(loadIncidents, 5000);
-
     </script>
 
 </body>
