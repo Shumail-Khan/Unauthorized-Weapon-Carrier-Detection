@@ -87,6 +87,7 @@ def video_feed():
 
 @router.post("/analyze-image") 
 async def analyze_image(file: UploadFile = File(...)):
+    runtime_config["detection_enabled"] = True  # Ensure detection is enabled for image analysis
     if not runtime_config["detection_enabled"]:
         return {
             "message": "Detection is disabled"
@@ -114,7 +115,7 @@ async def analyze_image(file: UploadFile = File(...)):
 
         # 2️⃣ Save full annotated frame
         filename = f"{uuid4()}.jpg"
-        image_path = str(MEDIA_FOLDER / filename).replace("\\", "/")
+        image_path = f"media/incidents/{filename}"
         cv2.imwrite(image_path, annotated_frame)
 
         # 3️⃣ Save cropped weapon images
@@ -128,7 +129,7 @@ async def analyze_image(file: UploadFile = File(...)):
                 crop = frame[y1:y2, x1:x2]
 
                 crop_filename = f"{uuid4()}.jpg"
-                crop_path = str(CROP_FOLDER / crop_filename).replace("\\", "/")
+                crop_path = f"media/crops/{crop_filename}"
                 cv2.imwrite(crop_path, crop)
 
                 crop_paths.append(crop_path)

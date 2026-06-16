@@ -12,6 +12,7 @@ from app.core.runtime_config import runtime_config
 from app.core.state_manager import threat_memory
 from app.core.processor import process_frame
 from app.core.live_state import live_state
+from app.core.association import compute_iou
 
 MEDIA_FOLDER = "media/incidents"
 CROP_FOLDER = "media/crops"
@@ -45,49 +46,29 @@ def get_camera():
 
 def remove_duplicate_persons(detections):
 
-    persons = []
-    others = []
-
-    for d in detections:
-
-        if d["class"] == "Person":
-            persons.append(d)
-        else:
-            others.append(d)
+    persons = [d for d in detections if d["class"] == "Person"]
+    others = [d for d in detections if d["class"] != "Person"]
 
     filtered = []
 
     for p in persons:
 
-        px1 = p["bbox"]["x1"]
-        py1 = p["bbox"]["y1"]
-        px2 = p["bbox"]["x2"]
-        py2 = p["bbox"]["y2"]
-
-        keep = True
+        duplicate = False
 
         for existing in filtered:
 
-            ex1 = existing["bbox"]["x1"]
-            ey1 = existing["bbox"]["y1"]
-            ex2 = existing["bbox"]["x2"]
-            ey2 = existing["bbox"]["y2"]
+            if compute_iou(
+                p["bbox"],
+                existing["bbox"]
+            ) > 0.4:
 
-            # simple overlap check
-            if (
-                abs(px1 - ex1) < 40 and
-                abs(py1 - ey1) < 40 and
-                abs(px2 - ex2) < 40 and
-                abs(py2 - ey2) < 40
-            ):
-                keep = False
+                duplicate = True
                 break
 
-        if keep:
+        if not duplicate:
             filtered.append(p)
 
     return filtered + others
-
 
 def generate_frames():
 

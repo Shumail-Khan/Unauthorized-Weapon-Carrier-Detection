@@ -1,7 +1,46 @@
 import cv2
+from app.core.association import compute_iou
+
+def filter_visual_detections(detections):
+
+    uniforms = [
+        d for d in detections
+        if d["class"] == "Uniform"
+    ]
+
+    filtered = []
+
+    for det in detections:
+
+        if det["class"] == "Person":
+
+            hide_person = False
+
+            for uniform in uniforms:
+
+                iou = compute_iou(
+                    det["bbox"],
+                    uniform["bbox"]
+                )
+
+                if iou > 0.5:
+                    hide_person = True
+                    break
+
+            if hide_person:
+                continue
+
+        filtered.append(det)
+
+    return filtered
 
 def draw_annotations(frame, detections, threat_level=None, is_authorized=True):
-    for d in detections:
+    
+    visual_detections = filter_visual_detections(
+    detections
+    )
+    
+    for d in visual_detections:
         x1 = d["bbox"]["x1"]
         y1 = d["bbox"]["y1"]
         x2 = d["bbox"]["x2"]

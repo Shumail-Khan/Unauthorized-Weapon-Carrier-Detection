@@ -12,5 +12,4 @@ class ThreatMemory:
     def is_active(self):
         return self.counter > 0
 
-
-threat_memory = ThreatMemory()
+threat_memory = ThreatMemory(max_frames=60)

@@ -1,7 +1,7 @@
 import math
 
 IOU_THRESHOLD = 0.01
-PROXIMITY_THRESHOLD = 250
+PROXIMITY_THRESHOLD = 100
 
 def compute_iou(A, B):
     xA = max(A["x1"], B["x1"])
@@ -29,7 +29,8 @@ def center_distance(A, B):
 
 
 def is_linked(person_box, obj_box):
-    return (
-        compute_iou(person_box, obj_box) > IOU_THRESHOLD or
-        center_distance(person_box, obj_box) < PROXIMITY_THRESHOLD
-    )
+
+    return compute_iou(
+        person_box,
+        obj_box
+    ) > IOU_THRESHOLD

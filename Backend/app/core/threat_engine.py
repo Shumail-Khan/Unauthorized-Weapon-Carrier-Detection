@@ -1,16 +1,22 @@
 def classify_threat(detections):
 
-    persons = [d for d in detections if d["class"] == "Person"]
-    weapons = [d for d in detections if d["class"] in ["Gun", "Weapon"]]
+    persons = [
+        d for d in detections
+        if d["class"] == "Person"
+    ]
 
-    if not weapons:
+    weapons = [
+        d for d in detections
+        if d["class"] in ["Gun", "Weapon"]
+    ]
+
+    if len(weapons) >= 1 and len(persons) <= 1:
         return "LOW"
 
-    count = len(persons)
-
-    if count <= 1:
-        return "LOW"
-    elif count <= 5:
+    if len(weapons) >= 1 and len(persons) <= 3 and len(persons) > 1:
         return "MEDIUM"
-    else:
+
+    if len(weapons) >= 1 and len(persons) > 3:
         return "HIGH"
+
+    return "LOW"

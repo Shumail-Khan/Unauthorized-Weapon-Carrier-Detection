@@ -4,7 +4,8 @@ from app.core.runtime_config import runtime_config
 
 # Load models
 person_model = YOLO("yolov8n.pt")              # COCO
-custom_model = YOLO(MODEL_PATH)       # Your trained mode
+custom_model = YOLO(MODEL_PATH)       #  Custom-trained model
+print(custom_model.names)
 
 def boxes_overlap(boxA, boxB, threshold=0.5):
 
@@ -78,6 +79,9 @@ def detect_objects(frame):
             class_name = custom_model.names[cls_id]
 
             x1, y1, x2, y2 = box.xyxy[0].tolist()
+            
+            if class_name.lower() == "person":
+                continue
 
             detections.append({
                 "class": class_name,

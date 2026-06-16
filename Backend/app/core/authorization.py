@@ -20,6 +20,8 @@ def check_authorization(detections):
         elif d["class"] in UNIFORM_CLASSES:
             uniforms.append(d["bbox"])
 
+    if weapons and not persons:
+        return False
     unauthorized_found = False
 
     for person in persons:
