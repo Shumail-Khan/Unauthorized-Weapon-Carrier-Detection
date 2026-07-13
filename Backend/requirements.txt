@@ -4,3 +4,5 @@ pymongo
 ultralytics
 opencv-python
 python-multipart
+onnxruntime
+onnx

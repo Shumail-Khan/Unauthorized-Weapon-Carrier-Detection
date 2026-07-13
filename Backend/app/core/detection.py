@@ -5,7 +5,6 @@ from app.core.runtime_config import runtime_config
 # Load models
 person_model = YOLO("yolov8n.pt")              # COCO
 custom_model = YOLO(MODEL_PATH)       #  Custom-trained model
-print(custom_model.names)
 
 def boxes_overlap(boxA, boxB, threshold=0.5):
 
